@@ -26,6 +26,8 @@ int ticks = 5;
 float overlaySeconds = -1;
 string overlayText;
 
+Font font;
+
 bool isInRange(int x, int y) {
     return x > MIN && y > MIN && x < CELLS_WIDTH && y < CELLS_HEIGHT;
 }
@@ -56,6 +58,8 @@ int getAliveNeighbors(int x, int y) {
 }
 
 void toggleCellAt(int x, int y, bool pixels = true) {
+    if (x > RESOLUTION_WIDTH || y > RESOLUTION_HEIGHT) return;
+
     x = pixels ? x / RATIO_WIDTH : x;
     y = pixels ? y / RATIO_HEIGHT : y;
 
@@ -113,20 +117,25 @@ void randomCells() {
     // TODO
 }
 
-void displayText(RenderWindow *window, const string &text) {
-    Font font;
-
+void loadFonts() {
     if (!font.loadFromFile("/usr/share/fonts/TTF/OpenSans-Regular.ttf")) {
         exit(1337);
     }
+}
 
-    Text str(text, font, 100);
-    str.setFillColor(Color::Magenta);
+Text createText(const string &text, int size, Color color) {
+    Text str = Text(text, font, size);
+    str.setFillColor(color);
+    return str;
+}
 
-    sf::FloatRect textRect = str.getLocalBounds();
+void displayCenteredText(RenderWindow *window, const string &text) {
+    Text str = createText(text, 100, Color::Magenta);
+
+    FloatRect textRect = str.getLocalBounds();
     str.setOrigin(textRect.left + textRect.width / 2.0f,
                   textRect.top + textRect.height / 2.0f);
-    str.setPosition(sf::Vector2f(window->getSize().x / 2.0f, window->getSize().y / 2.0f));
+    str.setPosition(Vector2f(window->getSize().x / 2.0f, window->getSize().y / 2.0f));
 
     window->draw(str);
 }
@@ -141,15 +150,26 @@ void setOverlay(Clock *clock, const string &text, float seconds) {
 void handleOverlay(RenderWindow *window, Clock *clock) {
     if (overlaySeconds >= 0) {
         if (overlaySeconds > clock->getElapsedTime().asSeconds()) {
-            displayText(window, overlayText);
+            displayCenteredText(window, overlayText);
         } else {
             overlaySeconds = -1;
         }
     }
 }
 
+void drawHints(RenderWindow *window) {
+    Text hintsText = createText(
+            string("Space = ") + (running ? "Pause" : "Run") + "\tLeft-Arrow = Speed >>\tRight-Arrow = Speed <<\tC = Clear", 15,
+            Color::White);
+
+    FloatRect rect = hintsText.getLocalBounds();
+    hintsText.setOrigin(rect.left + rect.width / 2.0f, 0);
+    hintsText.setPosition(window->getSize().x / 2.0f, RESOLUTION_HEIGHT);
+    window->draw(hintsText);
+}
+
 int main() {
-    RenderWindow window(sf::VideoMode(RESOLUTION_WIDTH, RESOLUTION_HEIGHT), "Conway's Game Of Life",
+    RenderWindow window(sf::VideoMode(RESOLUTION_WIDTH, (RESOLUTION_HEIGHT + 20)), "Conway's Game Of Life",
                         Style::Titlebar | Style::Close);
     Texture texture;
     texture.create(CELLS_WIDTH, CELLS_HEIGHT);
@@ -160,6 +180,8 @@ int main() {
     sprite.setScale(RATIO_WIDTH, RATIO_HEIGHT);
 
     Clock clock;
+
+    loadFonts();
 
     while (window.isOpen()) {
         Event event;
@@ -182,13 +204,13 @@ int main() {
                     case Keyboard::Key::Left:
                         ticks--;
                         updateTicks(&window);
-                        setOverlay(&clock, "SPEED +", 1);
+                        setOverlay(&clock, ">>", 1);
 
                         break;
                     case Keyboard::Key::Right:
                         ticks++;
                         updateTicks(&window);
-                        setOverlay(&clock, "SPEED -", 1);
+                        setOverlay(&clock, "<<", 1);
 
                         break;
                     case Keyboard::Key::C:
@@ -218,6 +240,7 @@ int main() {
         window.draw(sprite);
         handleOverlay(&window, &clock);
 
+        drawHints(&window);
         window.display();
     }
 
