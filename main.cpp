@@ -1,5 +1,9 @@
 #include <SFML/Graphics.hpp>
 #include <iostream>
+#include <thread>
+#include <chrono>
+#include <json/json.h>
+#include <fstream>
 
 using namespace sf;
 using namespace std;
@@ -8,8 +12,8 @@ const int NORMAL_FPS = 30;
 
 const int MIN = 0;
 
-const int CELLS_WIDTH = 75;
-const int CELLS_HEIGHT = 75;
+const int CELLS_WIDTH = 250;
+const int CELLS_HEIGHT = 250;
 
 const int RESOLUTION_WIDTH = (750 - (750 % CELLS_WIDTH));
 const int RESOLUTION_HEIGHT = (750 - (750 % CELLS_HEIGHT));
@@ -21,12 +25,18 @@ bool running = false;
 bool cells[CELLS_WIDTH][CELLS_HEIGHT];
 bool oldCells[CELLS_WIDTH][CELLS_HEIGHT];
 
+Json::Value layouts;
+
 int ticks = 5;
 
 float overlaySeconds = -1;
 string overlayText;
 
 Font font;
+
+void sleep(int milliseconds) {
+    this_thread::sleep_for(chrono::milliseconds(milliseconds));
+}
 
 bool isInRange(int x, int y) {
     return x > MIN && y > MIN && x < CELLS_WIDTH && y < CELLS_HEIGHT;
@@ -112,9 +122,53 @@ void clearCells() {
 }
 
 void randomCells() {
-    srand(time(nullptr));
-
     // TODO
+}
+
+void randomCellsAround(int x, int y, int radius = 5, int chance = 3, bool pixels = true) {
+    if (x > RESOLUTION_WIDTH || y > RESOLUTION_HEIGHT) return;
+
+    x = pixels ? x / RATIO_WIDTH : x;
+    y = pixels ? y / RATIO_HEIGHT : y;
+
+    for (int i = -radius; i <= radius; i++) {
+        for (int k = -radius; k <= radius; k++) {
+            int xi = x + i;
+            int yk = y + k;
+
+            if (!isInRange(xi, yk)) {
+                continue;
+            }
+
+            cells[xi][yk] = (rand() % chance) < 1;
+        }
+    }
+}
+
+void placeLayoutAt(int x, int y, Json::Value layout, bool pixels = true) {
+    if (x > RESOLUTION_WIDTH || y > RESOLUTION_HEIGHT) return;
+
+    x = pixels ? x / RATIO_WIDTH : x;
+    y = pixels ? y / RATIO_HEIGHT : y;
+
+    for (int i = 0; i < layout.size(); i++) {
+        for (int k = 0; k < layout[i].size(); k++) {
+            int xi = x + i;
+            int yk = y + k;
+
+            if (!isInRange(xi, yk)) {
+                continue;
+            }
+
+            cells[xi][yk] = layout[i][k].asBool();
+        }
+    }
+}
+
+Json::Value getRandomLayout() {
+    cout << rand() % layouts.size() << endl;
+
+    return layouts[rand() % layouts.size()];
 }
 
 void loadFonts() {
@@ -159,13 +213,21 @@ void handleOverlay(RenderWindow *window, Clock *clock) {
 
 void drawHints(RenderWindow *window) {
     Text hintsText = createText(
-            string("Space = ") + (running ? "Pause" : "Run") + "\tLeft-Arrow = Speed >>\tRight-Arrow = Speed <<\tC = Clear", 15,
+            string("Space = ") + (running ? "Pause" : "Run") +
+            "\t< = Speed +\t> = Speed -\tR = Speed Reset\tC = Clear", 15,
             Color::White);
 
     FloatRect rect = hintsText.getLocalBounds();
     hintsText.setOrigin(rect.left + rect.width / 2.0f, 0);
     hintsText.setPosition(window->getSize().x / 2.0f, RESOLUTION_HEIGHT);
     window->draw(hintsText);
+}
+
+void loadLayouts() {
+    ifstream jsonFile("layouts.json", ifstream::binary);
+
+    jsonFile >> layouts;
+    cout << "layouts loaded: " << layouts.size() << endl;
 }
 
 int main() {
@@ -182,6 +244,8 @@ int main() {
     Clock clock;
 
     loadFonts();
+    loadLayouts();
+    srand(time(nullptr));
 
     while (window.isOpen()) {
         Event event;
@@ -190,8 +254,16 @@ int main() {
             if (event.type == Event::Closed) {
                 window.close();
             } else if (event.type == Event::MouseButtonPressed && !running) {
-                if (event.mouseButton.button == Mouse::Button::Left) {
-                    toggleCellAt(event.mouseButton.x, event.mouseButton.y);
+                switch (event.mouseButton.button) {
+                    case Mouse::Button::Left:
+                        toggleCellAt(event.mouseButton.x, event.mouseButton.y);
+                        break;
+                    case Mouse::Button::Right:
+                        randomCellsAround(event.mouseButton.x, event.mouseButton.y);
+                        break;
+                    case Mouse::Button::Middle:
+                        placeLayoutAt(event.mouseButton.x, event.mouseButton.y, getRandomLayout());
+                        break;
                 }
             } else if (event.type == Event::KeyReleased) {
                 switch (event.key.code) {
@@ -204,22 +276,29 @@ int main() {
                     case Keyboard::Key::Left:
                         ticks--;
                         updateTicks(&window);
-                        setOverlay(&clock, ">>", 1);
+                        setOverlay(&clock, "<<", 1);
 
                         break;
                     case Keyboard::Key::Right:
                         ticks++;
                         updateTicks(&window);
-                        setOverlay(&clock, "<<", 1);
+                        setOverlay(&clock, ">>", 1);
 
                         break;
                     case Keyboard::Key::C:
+                        running = false;
                         clearCells();
                         setOverlay(&clock, "CLEAR", 1);
 
                         break;
                     case Keyboard::Key::R:
-                        randomCells();
+                        ticks = 5;
+                        updateTicks(&window);
+                        setOverlay(&clock, "SPEED RESET", 1);
+
+                        break;
+                    case Keyboard::Key::Z:
+                        randomCellsAround(0, 0, CELLS_WIDTH);
 
                         break;
                 }
