@@ -121,10 +121,6 @@ void clearCells() {
     }
 }
 
-void randomCells() {
-    // TODO
-}
-
 void randomCellsAround(int x, int y, int radius = 5, int chance = 3, bool pixels = true) {
     if (x > RESOLUTION_WIDTH || y > RESOLUTION_HEIGHT) return;
 
@@ -166,8 +162,6 @@ void placeLayoutAt(int x, int y, Json::Value layout, bool pixels = true) {
 }
 
 Json::Value getRandomLayout() {
-    cout << rand() % layouts.size() << endl;
-
     return layouts[rand() % layouts.size()];
 }
 
@@ -214,7 +208,7 @@ void handleOverlay(RenderWindow *window, Clock *clock) {
 void drawHints(RenderWindow *window) {
     Text hintsText = createText(
             string("Space = ") + (running ? "Pause" : "Run") +
-            "\t< = Speed +\t> = Speed -\tR = Speed Reset\tC = Clear", 15,
+            "\tWheel = Adjust Speed\tR = Speed Reset\tC = Clear", 15,
             Color::White);
 
     FloatRect rect = hintsText.getLocalBounds();
@@ -227,7 +221,6 @@ void loadLayouts() {
     ifstream jsonFile("layouts.json", ifstream::binary);
 
     jsonFile >> layouts;
-    cout << "layouts loaded: " << layouts.size() << endl;
 }
 
 int main() {
@@ -251,56 +244,65 @@ int main() {
         Event event;
 
         while (window.pollEvent(event)) {
-            if (event.type == Event::Closed) {
-                window.close();
-            } else if (event.type == Event::MouseButtonPressed && !running) {
-                switch (event.mouseButton.button) {
-                    case Mouse::Button::Left:
-                        toggleCellAt(event.mouseButton.x, event.mouseButton.y);
-                        break;
-                    case Mouse::Button::Right:
-                        randomCellsAround(event.mouseButton.x, event.mouseButton.y);
-                        break;
-                    case Mouse::Button::Middle:
-                        placeLayoutAt(event.mouseButton.x, event.mouseButton.y, getRandomLayout());
-                        break;
+            switch (event.type) {
+                case Event::Closed: {
+                    window.close();
+                    break;
                 }
-            } else if (event.type == Event::KeyReleased) {
-                switch (event.key.code) {
-                    case Keyboard::Key::Space:
-                        running = !running;
-                        updateTicks(&window);
-                        setOverlay(&clock, running ? "RUN" : "PAUSE", 1);
+                case Event::MouseButtonPressed: {
+                    if (running) break;
 
-                        break;
-                    case Keyboard::Key::Left:
-                        ticks--;
-                        updateTicks(&window);
-                        setOverlay(&clock, "<<", 1);
+                    switch (event.mouseButton.button) {
+                        case Mouse::Button::Left:
+                            toggleCellAt(event.mouseButton.x, event.mouseButton.y);
+                            break;
+                        case Mouse::Button::Right:
+                            randomCellsAround(event.mouseButton.x, event.mouseButton.y);
+                            break;
+                        case Mouse::Button::Middle:
+                            placeLayoutAt(event.mouseButton.x, event.mouseButton.y, getRandomLayout());
+                            break;
+                    }
 
-                        break;
-                    case Keyboard::Key::Right:
-                        ticks++;
-                        updateTicks(&window);
-                        setOverlay(&clock, ">>", 1);
+                    break;
+                }
+                case Event::MouseWheelScrolled: {
+                    bool up = event.mouseWheelScroll.delta > 0;
+                    ticks += (up ? 1 : -1);
 
-                        break;
-                    case Keyboard::Key::C:
-                        running = false;
-                        clearCells();
-                        setOverlay(&clock, "CLEAR", 1);
+                    if (ticks < 1) ticks = 1;
 
-                        break;
-                    case Keyboard::Key::R:
-                        ticks = 5;
-                        updateTicks(&window);
-                        setOverlay(&clock, "SPEED RESET", 1);
+                    updateTicks(&window);
+                    setOverlay(&clock, "Speed " + to_string(ticks), 1);
 
-                        break;
-                    case Keyboard::Key::Z:
-                        randomCellsAround(0, 0, CELLS_WIDTH);
+                    break;
+                }
+                case Event::KeyReleased: {
+                    switch (event.key.code) {
+                        case Keyboard::Key::Space:
+                            running = !running;
+                            updateTicks(&window);
+                            setOverlay(&clock, running ? "RUN" : "PAUSE", 1);
 
-                        break;
+                            break;
+                        case Keyboard::Key::C:
+                            running = false;
+                            clearCells();
+                            setOverlay(&clock, "CLEAR", 1);
+
+                            break;
+                        case Keyboard::Key::R:
+                            ticks = 5;
+                            updateTicks(&window);
+                            setOverlay(&clock, "SPEED RESET", 1);
+
+                            break;
+                        case Keyboard::Key::Z:
+                            randomCellsAround(0, 0, CELLS_WIDTH);
+
+                            break;
+                    }
+                    break;
                 }
             }
         }
