@@ -34,6 +34,9 @@ string overlayText;
 
 Font font;
 
+Color background = Color::White;
+Color foreground = Color::Black;
+
 void sleep(int milliseconds) {
     this_thread::sleep_for(chrono::milliseconds(milliseconds));
 }
@@ -108,7 +111,7 @@ void simulate() {
 void draw(Image *image) {
     for (int x = 0; x < CELLS_WIDTH; x++) {
         for (int y = 0; y < CELLS_HEIGHT; y++) {
-            image->setPixel(x, y, cells[x][y] ? Color::Black : Color::White);
+            image->setPixel(x, y, cells[x][y] ? foreground : background);
         }
     }
 }
@@ -223,6 +226,12 @@ void loadLayouts() {
     jsonFile >> layouts;
 }
 
+Color randomColor() {
+    Color colors[] = {Color::Black, Color::Cyan, Color::Magenta, Color::Red, Color::Green, Color::Blue, Color::Yellow};
+
+    return colors[rand() % (sizeof(colors) / sizeof(Color))];
+}
+
 int main() {
     RenderWindow window(sf::VideoMode(RESOLUTION_WIDTH, (RESOLUTION_HEIGHT + 20)), "Conway's Game Of Life",
                         Style::Titlebar | Style::Close);
@@ -301,13 +310,18 @@ int main() {
                             randomCellsAround(0, 0, CELLS_WIDTH);
 
                             break;
+                        case Keyboard::Key::S:
+                            Color color = randomColor();
+
+                            foreground = color;
+                            break;
                     }
                     break;
                 }
             }
         }
 
-        window.clear();
+        window.clear(foreground);
 
         if (running) {
             simulate();
